@@ -1,0 +1,359 @@
+\documentclass[11pt,a4paper]{article}
+
+% 1. Codificación e Idioma
+\usepackage[utf8]{inputenc}
+\usepackage[spanish, es-tabla]{babel}
+
+% 2. Paquete de gestión de captiones (añadir esto suele fijar el error)
+\usepackage{caption} 
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage[table]{xcolor}
+\usepackage{float}
+\usepackage{amssymb}
+\usepackage{subcaption}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{tikz}
+% 3. Formato y Autores
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{authblk} 
+\usetikzlibrary{babel}
+\definecolor{leggreen}{RGB}{85, 170, 85}
+\definecolor{legblue}{RGB}{70, 130, 180}
+\definecolor{lidarred}{RGB}{200, 80, 80}
+\definecolor{background}{RGB}{240, 240, 240}
+\definecolor{terrain}{RGB}{139, 69, 19}
+
+% 4. Bibliografía APA (Cargar al final del preámbulo)
+
+\title{\textbf{Trabajo de Aprendizaje por Refuerzo: Caminante Bípedo}}
+\author{
+	Jorge Bengoa Pinedo \and
+	Bogurad Barañski Barañska
+}
+\affil{\textbf{Máster TECI - Redes neuronales y aprendizaje estadístico}}
+\date{\today}
+
+\begin{document}
+	\maketitle
+	\section{Introducción}
+	En este trabajo se busca abordar mediante aprendizaje por refuerzo el problema del caminante bípedo (\textit{Bipedal Walker}) que consiste en enseñar a un robot en el entorno virtual \textit{Gymnasium} a andar. Para ello, se dispone de los datos de 24 sensores, tal y como se puede ver en la figura \ref{fig:bipedal_walker_obs}, que conforman el espacio de observaciones. A partir de esta información, el robot debe tomar decisiones dinámicas mediante sus 4 actuadores, situados cada uno en una articulación. Estos actuadores se encargan de estabilizar y ejercer movimiento sobre el robot aplicando una velocidad de rotación comprendida entre -1 y 1 $rad/s$.
+
+\begin{figure}[H]
+	\centering
+	\shorthandoff{>}
+	\resizebox{\textwidth}{!}{%
+		\begin{tikzpicture}[scale=2, font=\sffamily, every node/.style={rounded corners=2pt, inner sep=3pt}]
+			
+			% Set a large bounding box to ensure everything fits with ample space
+			\draw[white] (-5, -2) rectangle (8, 6.5);
+			
+			% --- Main Title ---
+			\node[anchor=north, font=\LARGE\bfseries, text width=29cm, align=center] at (0.5, 5.5) 
+			{Caminante Bípedo de Gymnasium: Espacio de Observaciones (24 Dimensiones)};
+			
+			% --- The Ground / Terrain ---
+			\fill[terrain] (-3.5, 0.2) -- (3.5, 0.2) -- (3.5, -0.5) -- (-3.5, -0.5) -- cycle;
+			\draw[ultra thick, brown!80!black] (-3.5, 0.2) -- (3.5, 0.2) node[below right, black] {\textbf{Terreno}};
+			
+			% --- Lidar / Spatial Sensors (Vars 14-23) ---
+			\node[anchor=west, text width=5cm, align=left, fill=lidarred!10, draw=lidarred, thick] (lidartag) at (-1, -1.5)
+			{\textbf{Sensores Espaciales (Lidar)} \textbf{(Vars: 14-23)}};
+			
+			% Simulating 10 beams and connecting them to the hull and tag
+			\foreach \x\i in {-2.2/14, -1.8/15, -1.4/16, -1.0/17, -0.6/18, 0.6/19, 1.0/20, 1.4/21, 1.8/22, 2.2/23} {
+				\draw[dashed, lidarred, thick] (0, 3) -- (\x, 0.2);
+				\draw[->, thin, lidarred] (\x, 0.4) -- (lidartag.north);
+			}
+			% --- The Hull (Body - Vars 0-3) ---
+			\node[anchor=center, 
+			draw=black, 
+			ultra thick, 
+			fill=gray!10, 
+			rounded corners=5mm, 
+			text width=5.5cm, 
+			align=center, 
+			inner sep=8pt] (hull) at (0, 3.15) 
+			{\textbf{Cuerpo} \\ \color{black}{\textbf{(Vars: 0-3)}}  \\  \color{white}{.} \\  \color{white}{.}};
+			% --- Back Leg (Leg 2 - Vars 9-13) ---
+			\draw[line width=3mm, legblue] (0.6, 2.7) -- (1.2, 1.5) -- (0.8, 0.2);
+			\node[fill=legblue!10, draw=legblue, thick] (hip2callout) at (4.5, 2.9) {Cadera 2 \textbf{(Vars: 9, 10)}};
+			\filldraw[white, draw=legblue, ultra thick] (0.6, 2.7) circle (0.15);
+			\draw[->, legblue, thick] (hip2callout.west) -- (0.6, 2.7);
+			
+			\node[fill=legblue!10, draw=legblue, thick] (knee2callout) at (4.5, 1.5) {Rodilla 2 \textbf{(Vars: 11, 12)}};
+			\filldraw[white, draw=legblue, ultra thick] (1.2, 1.5) circle (0.15);
+			\draw[->, legblue, thick] (knee2callout.west) -- (1.2, 1.5);
+			
+			\node[fill=legblue!10, draw=legblue, thick] (contact2callout) at (5.0, 0.5) {Contacto con Terreno \textbf{(Var: 13)}};
+			\draw[->, legblue, thick] (contact2callout.west) -- (0.8, 0.2);
+			
+			% --- Front Leg (Leg 1 - Vars 4-8) ---
+			\draw[line width=3mm, leggreen] (-0.6, 2.7) -- (-1.2, 1.5) -- (-0.8, 0.2);
+			\node[fill=leggreen!10, draw=leggreen, thick] (hip1callout) at (-4.5, 2.9) {Cadera 1 \textbf{(Vars: 4, 5)}};
+			\filldraw[white, draw=leggreen, ultra thick] (-0.6, 2.7) circle (0.15);
+			\draw[->, leggreen, thick] (hip1callout.east) -- (-0.6, 2.7);
+			
+			\node[fill=leggreen!10, draw=leggreen, thick] (knee1callout) at (-4.5, 1.5) {Rodilla 1  \textbf{(Vars: 6, 7)}};
+			\filldraw[white, draw=leggreen, ultra thick] (-1.2, 1.5) circle (0.15);
+			\draw[->, leggreen, thick] (knee1callout.east) -- (-1.2, 1.5);
+			
+			\node[fill=leggreen!10, draw=leggreen, thick] (contact1callout) at (-5.0, 0.5) {Contacto con Terreno \textbf{(Var: 8)}};
+			\draw[->, leggreen, thick] (contact1callout.east) -- (-0.8, 0.2);
+			
+		
+			
+			% --- Structured Observation Variables Legend (Right Panel) ---
+			\node[anchor=north west, fill=background, draw=black, thick, text width=10cm, inner sep=5pt] (legendpanel) at (8, 6.5) {
+				{\Large\bfseries LEYENDA}\vspace{3pt}\hrule\vspace{5pt}
+				
+				\textbf{Cuerpo (Vars 0-3)}\vspace{2pt}
+				\begin{description}
+					\item[Var 0:] Ángulo del cuerpo (rad)
+					\item[Var 1:] Velocidad angular del cuerpo (rad/s)
+					\item[Var 2:] Velocidad horizontal (m/s)
+					\item[Var 3:] Velocidad vertical (m/s)
+				\end{description}\vspace{5pt}
+				
+				\textbf{PIERNA 1 (Derecha) (Vars 4-8)}\vspace{2pt}
+				\begin{description}
+					\item[Var 4:] Ángulo de cadera 1 (rad)
+					\item[Var 5:] Vel. angular de cadera 1 (rad/s)
+					\item[Var 6:] Ángulo de rodilla 1 (rad)
+					\item[Var 7:] Vel. angular de rodilla 1 (rad/s)
+					\item[Var 8:] Contacto con el suelo (V/F)
+				\end{description}\vspace{5pt}
+				
+				\textbf{PIERNA 2 (Izquierda) (Vars 9-13)}\vspace{2pt}
+				\begin{description}
+					\item[Var 9:] Ángulo de cadera 2 (rad)
+					\item[Var 10:] Vel. angular de cadera 2 (rad/s)
+					\item[Var 11:] Ángulo de rodilla 2 (rad)
+					\item[Var 12:] Vel. angular de rodilla 2 (rad/s)
+					\item[Var 13:] Contacto con el suelo (V/F)
+				\end{description}\vspace{5pt}
+				
+				\textbf{LIDAR (Vars 14-23)}\vspace{2pt}
+				\begin{description}
+					\item[Vars 14-23:] Telémetros Lidar \\ 10 mediciones de distancia
+				\end{description}
+			};
+		\end{tikzpicture}%
+	}
+	\shorthandon{>} 
+	\caption{Mapping of the 24-Dimensional Observation Space for the BipedalWalker-v3 Environment}
+	\label{fig:bipedal_walker_obs}
+\end{figure}
+
+Por tanto, en este trabajo, para la resolución del problema planteado anteriormente se propone abordarlo mediante aprendizaje por refuerzo y, en concreto, utilizando el paradigma de \textit{Soft Actor Critic} descrito en los fundamentos matemáticos a continuación. Este se implementa en \textit{Python} mediante librerías estándar de \textit{stable\_baselines3}, donde primero se realiza una búsqueda exhaustiva de hiperparámetros mediante optimización con \textit{optuna}, para luego entrenar un modelo con los mejores parámetros y ver si el agente aprende a andar.
+
+\section{Fundamentos matemáticos}
+	\section{Procesos de decisión de Markov}
+	
+	La siguiente sección se ha escrito de acuerdo a \cite{barto2021reinforcement}. 
+	
+	Los procesos de decisión de Markov (MDP) sirven para modelar el aprendizaje mediante interacción para conseguir un objetivo. Los MDP comprenden dos elementos:
+	
+	\begin{itemize}
+		\item Agente: es el que aprende y toma decisiones. 
+		\item Entorno: comprende todo lo que es externo al agente e interactúa con el agente.
+	\end{itemize}
+	 
+	 Cuando el agente toma una decisión, el entorno presenta una nueva situación al agente. Además, le entrega una recompensa. Mediante sus acciones, el agente busca maximizar la recompensa obtenida a lo largo del tiempo. La figura \ref{fig:mdp} refleja estas interacciones.
+	 
+	 \begin{figure}[H]
+	 	\centering
+	 	\includegraphics[width=0.7\linewidth]{figuras/mdp.png}
+	 	\caption{Interacción entre agente y entorno a través de un proceso de decisión de Markov.}
+	 	\label{fig:mdp}
+	 \end{figure}
+	 
+	Sean $\mathcal{S}$, $\mathcal{A}$ y $\mathcal{R}$ los conjuntos de estados, acciones y recompensas, respectivamente, entonces:
+	
+	\begin{align}
+	& p: \mathcal{S} \times \mathcal{R} \times \mathcal{S} \times \mathcal{A} \to [0,1] \nonumber \\
+	& p(s', r \mid s, a) = \Pr{S_t = s', R_t = r \mid S_{t-1} = s, A_{t-1} = a} \nonumber \\
+	& \sum_{s' \in \mathcal{S}} \sum_{r \in \mathcal{R}} p(s', r \mid s, a) = 1, \quad \forall s \in \mathcal{S}, a \in \mathcal{A}(s) 
+	\end{align}
+	
+	Donde $s, s' \in \mathcal{S}$, $r \in R$, $a \in A$. A partir de la ecuación anterior, se puede calcular la probabilidad marginal del siguiente estado:
+	
+	\begin{align}
+	& p: \mathcal{S} \times \mathcal{S} \times \mathcal{A} \to [0,1] \nonumber \\
+	& p(s' \mid s, a) = \Pr\{S_t = s' \mid S_{t-1} = s, A_{t-1} = a\} = \sum_{r \in \mathcal{R}} p(s', r \mid s, a) 
+	\end{align}
+	
+	Y la recompensa esperada: 
+	\begin{align}
+		& r: \mathcal{S} \times \mathcal{A} \to \mathbb{R} \nonumber \\
+		& r(s, a) = \mathbb{E}[R_t \mid S_{t-1} = s, A_{t-1} = a] = \sum_{r \in \mathcal{R}} r  \cdot p(r \mid s, a) = \sum_{r \in \mathcal{R}} r \sum_{s' \in \mathcal{S}} p(s', r \mid s, a)
+	\end{align}
+	
+	\subsection{Aprendizajes episódico y continuo}
+	El objetivo del agente es maximizar la recompensa esperada en el largo plazo. Esto implica conocer cómo una acción presente repercute en los sucesivos pasos temporales. Según se tenga un estado final o no, se distingue entre:
+	
+	\begin{itemize}
+		\item Aprendizaje episódico: cada episodio tiene una duración $T$ finita, que no tiene por qué ser fija (p.ej. partidas de ajedrez). La recompensa esperada a maximizar se podría escribir como:
+		
+		\begin{equation}
+		G_t = R_{t+1} + R_{t+2} + \cdots + R_T
+		\end{equation}
+		
+		\item Aprendizaje continuo: las interacciones agente-entorno no tienen un fin o este es muy lejano (p.ej. un robot \textit{pick and place}). En tal caso, la definición anterior podría tomar el valor $\infty$. Para evitarlo, se define la recompensa descontada:
+		
+		\begin{equation}
+		G_t = \sum_{k=0}^{\infty} \gamma^k R_{t+k+1} = R_{t+1} + \gamma \sum_{k=1}^\infty \gamma^{k-1} R_{t+k+1} = R_{t+1} + \gamma G_{t+1}
+		\end{equation}
+		
+		Donde $\gamma$ es el factor de descuento. Si $\gamma < 1$, el sumatorio converge a un valor finito. Cuanto mayor sea el valor de $\gamma$, mayor visión a futuro tendrá el agente.
+	\end{itemize}
+	
+	Se puede adoptar una notación común a ambos problemas:
+	
+	\begin{equation}
+	G_t = \sum_{k=t+1}^{T} \gamma^{k-t-1} R_{k}
+	\end{equation}
+	
+	Donde las condiciones $\gamma=1$ y $T=\infty$ son mutuamente excluyentes y representan los casos episódico y continuo de forma excluyente.
+	
+	\subsection{Políticas y funciones de valor}
+	Una política define la probabilidad de que el agente tome una determinada acción dado un estado. Se denotará por $\pi(a \mid s)$. 
+	
+	Por otro lado, las funciones de valor pueden ser:
+	
+	\begin{itemize}
+		\item Funciones de estado-valor: determinan cómo de bueno es que el agente esté en un determinado estado:
+		
+		\begin{equation}
+		v_\pi(s) = \mathbb{E}_\pi[G_t \mid S_t = s] = \mathbb{E}_\pi \left[ \sum_{k=0}^\infty \gamma^k R_{t+k+1} \;\middle|\; S_t = s \right], \forall s \in \mathcal{S}
+		\end{equation}
+		
+		La función estado-valor óptima es:
+		
+		\begin{equation}
+		v_{*}(s) = \max_{\pi} v_\pi(s), \forall s \in \mathcal{S}
+		\end{equation}
+		
+		\item Funciones de acción-valor: determinan cómo de bueno es que el agente tome una dterminada acción dado un estado:
+		
+		\begin{equation}
+		q_\pi(s, a) = \mathbb{E}_\pi[G_t \mid S_t = s, A_t = a] = \mathbb{E}_\pi \left[ \sum_{k=0}^\infty \gamma^k R_{t+k+1} \;\middle|\; S_t = s, A_t = a \right]
+		\end{equation}
+		
+		Se dice que una política es óptima si $v_*(s) \ge v_\pi(s), \forall s \in S, \forall \pi$. La función acción-valor óptima es:
+		
+		\begin{equation}
+		q_{*}(s,a) = \max_{\pi} q_\pi(s,a) = \mathbb{E}\left[ R_{t+1} + \gamma v_{*}(S_{t+1}) \mid S_t = t, A_t = a \right], \forall s \in \mathcal{S}, a \in \mathcal{A}
+		\end{equation}
+	\end{itemize}
+	
+	A partir de las expresiones anteriores se deduce la ecuación de expectativa de Bellman sobre la función estado-valor:
+	
+	\begin{align}
+	v_\pi(s) &= \mathbb{E}_\pi[G_t \mid S_t = s] = \mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_t = s] \nonumber \\
+	&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_t = s, A_t = a] && \text{(Ley de la probabilidad total)} \nonumber \\
+	&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s' \in \mathcal{S}} \sum_{r \in \mathcal{R}} p(s', r \mid s, a) \cdot \nonumber \\
+	&\qquad\mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_t = s, A_t = a, S_{t+1} = s', R_{t+1} = r] && \text{(Ley de la probabilidad total)} \nonumber \\
+	&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s',r} p(s', r \mid s, a) \mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_{t+1} = s'] && \text{(Propiedad Markoviana)} \nonumber \\
+	&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s',r} p(s', r \mid s, a) \mathbb{E}_\pi[r+ \gamma G_{t+1} \mid S_{t+1} = s'] && \text{(Propiedad Markoviana)} \nonumber\\
+	&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s',r} p(s', r \mid s, a) \left[ r + \gamma \mathbb{E}_\pi[G_{t+1} \mid S_{t+1} = s'] \right] \nonumber \\
+	&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s',r} p(s', r \mid s, a) \left[ r + \gamma v_{\pi}(s') \right]
+	\end{align}
+	
+	Análogamente, se puede obtener la ecuación de optimalidad de Bellman sobre la función estado-valor (nótese que la función estado-valor óptima corresponde con seguir la política óptima partiendo de la acción que maximiza la recompensa):
+	
+	\begin{align}
+	v_{*}(s) &= \max_{a \in \mathcal{A}(s)} q_{\pi^*}(s, a) \nonumber \\
+	&= \max_a \mathbb{E}_{\pi^*} [G_t \mid S_t = s, A_t = a] \nonumber \\
+	&= \max_a \mathbb{E}_{\pi^*} [R_{t+1} + \gamma G_{t+1} \mid S_t = s, A_t = a] \nonumber \\
+	&= \max_a \mathbb{E} [R_{t+1} + \gamma v_{*}(S_{t+1}) \mid S_t = s, A_t = a] \nonumber \\
+	&= \max_{a} \sum_{s', r} p(s', r \mid s, a) \left[ r + \gamma v_{*}(s') \right]
+	\end{align}
+	
+	Las mismas ecuaciones de Bellman se pueden deducir para la función acción-valor:
+	
+	\begin{align}
+	& q_{\pi}(s,a) = \mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_t = s, A_t = a] = \sum_{s',r} p(s', r \mid s, a) \left[ r + \gamma v_{\pi}(s') \right] \\
+	& q_*(s,a) = \mathbb{E}_\pi[R_{t+1} + \gamma \max_{a'} q_*(S_{t+1}, a') \mid S_t = s, A_t = a] = \sum_{s',r} p(s', r \mid s, a) \left[ r + \gamma \max_{a'} q_*(s',a') \right]
+	\end{align}
+	
+	Conocido el valor de $v_*(s)$, bastaría con mirar el siguiente estado con ese valor esperado y seleccionar la acción que conduce a dicho estado. Como la información a largo plazo está codificada en la propia función estado-valor óptima, moverse de forma codiciosa (\textit{greedy}), es decir, mirando solo al siguiente instante, ya implica tener en cuenta el futuro. Conocido $q_*(s,a)$, el problema es aún más fácil ya que no haría falta conocer que acción conduce al siguiente estado. Tan solo habría que seleccionar la acción cuyo valor sea óptimo. \\
+	
+	Lógicamente, resolver las ecuaciones de Bellman puede no ser factible debido a que se necesitaría memoria y potencia computacional infinitas. Por lo tanto, se usan aproximaciones de las funciones estado-valor y acción-valor. Aunque los resultados son subóptimos, suelen funcionar razonablemente bien. Las políticas óptimas resultantes tienden a poner más esfuerzo en aprender de los estados que ocurren frecuente y menos esfuerzo en los menos habituales.
+	
+	\section{Aprendizaje por diferencias temporales}
+	Idealmente, la política óptima se deriva de las ecuaciones de optimalidad de Bellman. Sin embargo, su resolución no es trivial, por lo que aparecen distintos esquemas para aproximar $v_*(s)$ y $q_*(s,a)$:
+	
+	\begin{itemize}
+		\item Métodos de Monte-Carlo: no requieren un modelo del entorno. Las funciones de valor aproximadas se actualizan al final de cada episodio, estimando la esperanza a partir de una muestra.
+		\item Programación dinámica: no requiere esperar al final de cada episodio para su actualización (permiten aprendizaje continuo), ya que calcula la esperanza exacta de las funciones de valor al suponer conocido un modelo del entorno.
+		\item Diferencias temporales: aproximan las funciones valor sin necesidad de esperar el final de cada episodio ni de un modelo del entorno.
+	\end{itemize}
+	
+	El enfoque de diferencias temporales combina las ventajas de los métodos de Monte-Carlo y la programación dinámica, haciéndolo flexible ante diversas situaciones.
+	
+	\subsection{Predicción TD}
+	El problema de predicción consiste en estimar la función de valor $v_\pi$ a partir de la experiencia siguiendo una política $\pi$. El método TD(0) es el más simple de todos. Actualiza su estimación en el instante $t+1$ utilizando la recompensa inmediata observada y la estimación de $v_\pi$ en el siguiente estado:
+	
+	\begin{equation}
+	V(S_t) \leftarrow V(S_t) + \alpha \left[ R_{t+1} + \gamma V(S_{t+1}) - V(S_t) \right] = V(S_t) + \alpha \delta_t
+	\end{equation}
+	
+	Donde $\alpha \in (0, 1]$ es la tasa de aprendizaje y $\delta_t = R_{t+1} + \gamma V(S_{t+1}) - V(S_t)$ es el error TD. Este último mide la diferencia entre la estimación actual, $V(S_t)$, y una estimación mejorada respaldada por la experiencia, $R_{t+1} + \gamma V(S_{t+1})$.
+	
+	Otra ventaja de los métodos TD frente a Monte-Carlo es que son más robustos ante acciones arbitrarias de exploración. En los métodos de Monte-Carlo, este tipo de acciones podría distorsionar el valor de la esperanza, por lo que habría que descartar la iteración. Los métodos TD, por contra, aprenden de cada transición. \\
+	
+	Los métodos TD convergen a la media de $v_\pi$ si se sigue una política fija, $\pi$, y $\alpha$ es constante y suficientemente pequeño. La probabilidad de convergencia es 1 si $\alpha$ se reduce gradualmente, cumpliendo ciertas condiciones. No obstante, muchas de las pruebas de convergencia solo aplican al caso tabular.\\
+	
+	Respecto a la velocidad de convergencia, los métodos TD convergen más rápido que Monte-Carlo de forma práctica, aunque no haya una demostración matemática. Esto ocurre para el formato online y batch (acumulando el error TD sobre todas las muestras disponibles antes de actualizar).
+	
+	\subsection{Control TD}
+	El problema de control consiste en estimar $q_\pi(s,a)$. Por lo tanto, la actualización depende de los pares estado-acción. Existen distintas variantes de los métodos TD para este tipo de problemas:
+	
+	\begin{itemize}
+		\item SARSA: es el caso más simple:
+		
+		\begin{equation}
+		Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma Q(S_{t+1}, A_{t+1}) - Q(S_t, A_t) \right]
+		\end{equation}
+		
+		Es un algoritmo on-policy (la misma política seguida para la transición de estados es la que se actualiza) en el que continuamente se estima $q_\pi$ a la vez que se va modificando la política $\pi$ para que tienda a la codicia. Se empieza con una política que permite la exploración con una cierta probabilidad. Cada vez se favorece más las decisiones de explotación (seleccionar las recompensas que maximizan las acciones) en contra de dicha exploración.
+		
+		\item Q-learning: es un algoritmo off-policy que converge a $q_*$:
+		
+		\begin{equation}
+		Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma \max_a Q(S_{t+1}, a) - Q(S_t, A_t) \right]
+		\end{equation}
+		
+		La política de comportamiento para moverse por los estados puede elegirse libremente, lo que favorece la exploración. A medida que se van observando los estados, la política objetivo aprende a seleccionar la acción que maximiza la recompensa. Una ventaja de los métodos off-policy es que no importa cómo se han generado las muestras a la hora de actualizar la política objetivo, ya que ambas están desagregadas. Los métodos on-policy se actualizan de acuerdo a los estados explorados según la política actual. Es decir, no pueden reutilizar datos pasados porque fueron generados con una política diferente. 
+		
+		\item Expected SARSA:
+		
+		\begin{align}
+		Q(S_t, A_t) &\leftarrow Q(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma \mathbb{E}_\pi \left[ Q(S_{t+1}, A_{t+1}) \mid S_{t+1} \right] - Q(S_t, A_t) \right] \nonumber \\
+		&= Q(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma \sum_a \pi(a|S_{t+1}) Q(S_{t+1}, a) - Q(S_t, A_t) \right]
+		\end{align}
+		
+		En vez de evaluar el siguiente par estado-acción, usa su valor esperado. La política objetivo $\pi$ puede ser la misma que la de comportamiento (on-policy) o distinta (off-policy). Reduce la varianza asociada a elegir una única acción $A_{t+1}$ de forma aleatoria a cambio de un mayor coste computacional.
+		
+		\item Double-Q-learning: utiliza dos funciones de acción-valor para desacoplar la acción de la evaluación:
+		
+		\begin{align}
+		& Q_1(S_t, A_t) \leftarrow Q_1(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma Q_2(S_{t+1}, \arg\max_a Q_1(S_{t+1}, a)) - Q_1(S_t, A_t) \right] \\
+		& Q_2(S_t, A_t) \leftarrow Q_2(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma Q_1(S_{t+1}, \arg\max_a Q_2(S_{t+1}, a)) - Q_2(S_t, A_t) \right]
+		\end{align}
+		
+		El Q-learning es optimista cuando las recompensas son ruidosas. Intuitivamente, se puede imaginar la situación en que los valores reales $q(s,a)$ son todos cero, pero sus estimaciones $Q(s,a)$ presentan incertidumbre. El máximo de los valores reales es cero, mientras que el máximo estimado es positivo. Esto se conoce como sesgo de maximización. \\
+		
+		El double-Q-learning aborda este problema calculando simultáneamente dos funciones acción-valor: $Q_1(s,a)$ y $Q_2(s,a)$. Pero en cada iteración se actualiza solamente una de ellas a partir de la evaluación según la otra. Si una recompensa es ruidosa en torno a cero, será raro que tome valores positivos constantemente. Por ejemplo, para la primera muestra se actualiza $Q_1$, que ve una recompensa muy alta. Si se usara Q-learning, otros pares estado-acción aumentarían su valor solamente por la expectativa de volver a repetir la jugada. Sin embargo, $Q_2$ evalúa el par estado-acción sin haber visto tal recompensa. Su percepción será que dicho par estado-acción no tiene tanto valor. Este proceso se repite actualizando arbitrariamente cada función.
+		
+	\end{itemize}
+	
+	\newpage
+	\bibliographystyle{ieeetr}
+	\bibliography{bibliografia} 
+
+		
+\end{document}
