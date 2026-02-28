@@ -1,0 +1,5 @@
+learning_rate: 0.00010482627024262803
+batch_size: 512
+net_arch_width: 400
+tau: 0.00213032657351343
+gamma: 0.99

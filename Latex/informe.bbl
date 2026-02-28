@@ -4,4 +4,14 @@
 A.~G. Barto, ``Reinforcement learning: An introduction. by richard’s
   sutton,'' {\em SIAM Rev}, vol.~6, no.~2, p.~423, 2021.
 
+\bibitem{NIPS2011_86e8f7ab}
+J.~Bergstra, R.~Bardenet, Y.~Bengio, and B.~K\'{e}gl, ``Algorithms for
+  hyper-parameter optimization,'' in {\em Advances in Neural Information
+  Processing Systems} (J.~Shawe-Taylor, R.~Zemel, P.~Bartlett, F.~Pereira, and
+  K.~Weinberger, eds.), vol.~24, Curran Associates, Inc., 2011.
+
+\bibitem{46180}
+D.~Golovin, B.~Solnik, S.~Moitra, G.~Kochanski, J.~E. Karro, and D.~Sculley,
+  eds., {\em Google Vizier: A Service for Black-Box Optimization}, 2017.
+
 \end{thebibliography}
