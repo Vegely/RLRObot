@@ -163,206 +163,384 @@ Por tanto, en este trabajo, para la resolución del problema planteado anteriorm
 Por último, es importante destacar que el objetivo fundamental del aprendizaje por refuerzo en este entorno es que el robot logre cruzar el terreno por completo. Para ello, la función de recompensa se define bajo dos premisas clave: el agente acumula progresivamente hasta 300 puntos si consigue llegar a la meta, pero sufre una fuerte penalización de -100 puntos en el instante en que su cuerpo principal entra en contacto con el suelo. Además, se aplica un castigo por el uso excesivo de torque en los articulaciones. Esta limitación tiene como propósito desincentivar los movimientos erráticos y asegurar que la marcha aprendida sea transferible a casos reales, donde la saturación de los motores tiene un alto coste físico.
 
 \section{Fundamentos matemáticos}
-	\section{Procesos de decisión de Markov}
-	
-	La siguiente sección se ha escrito de acuerdo a \cite{barto2021reinforcement}. 
-	
-	Los procesos de decisión de Markov (MDP) sirven para modelar el aprendizaje mediante interacción para conseguir un objetivo. Los MDP comprenden dos elementos:
-	
-	\begin{itemize}
-		\item Agente: es el que aprende y toma decisiones. 
-		\item Entorno: comprende todo lo que es externo al agente e interactúa con el agente.
-	\end{itemize}
-	 
-	 Cuando el agente toma una decisión, el entorno presenta una nueva situación al agente. Además, le entrega una recompensa. Mediante sus acciones, el agente busca maximizar la recompensa obtenida a lo largo del tiempo. La figura \ref{fig:mdp} refleja estas interacciones.
-	 
-	 \begin{figure}[H]
-	 	\centering
-	 	\includegraphics[width=0.7\linewidth]{figuras/mdp.png}
-	 	\caption{Interacción entre agente y entorno a través de un proceso de decisión de Markov.}
-	 	\label{fig:mdp}
-	 \end{figure}
-	 
-	Sean $\mathcal{S}$, $\mathcal{A}$ y $\mathcal{R}$ los conjuntos de estados, acciones y recompensas, respectivamente, entonces:
-	
-	\begin{align}
-	& p: \mathcal{S} \times \mathcal{R} \times \mathcal{S} \times \mathcal{A} \to [0,1] \nonumber \\
-	& p(s', r \mid s, a) = \Pr{S_t = s', R_t = r \mid S_{t-1} = s, A_{t-1} = a} \nonumber \\
-	& \sum_{s' \in \mathcal{S}} \sum_{r \in \mathcal{R}} p(s', r \mid s, a) = 1, \quad \forall s \in \mathcal{S}, a \in \mathcal{A}(s) 
-	\end{align}
-	
-	Donde $s, s' \in \mathcal{S}$, $r \in R$, $a \in A$. A partir de la ecuación anterior, se puede calcular la probabilidad marginal del siguiente estado:
-	
-	\begin{align}
-	& p: \mathcal{S} \times \mathcal{S} \times \mathcal{A} \to [0,1] \nonumber \\
-	& p(s' \mid s, a) = \Pr\{S_t = s' \mid S_{t-1} = s, A_{t-1} = a\} = \sum_{r \in \mathcal{R}} p(s', r \mid s, a) 
-	\end{align}
-	
-	Y la recompensa esperada: 
-	\begin{align}
+		Los apartados de procesos de decisión de Markov, aprendizaje por diferencias temporales y métodos de gradiente de política se basan en los capítulos 3, 6 y 13 de \cite{barto2021reinforcement}, respectivamente. El subapartado sobre soft actor-critic se apoya en \cite{haarnoja2018soft}.
+		 
+		\subsection{Procesos de decisión de Markov}		
+		Los procesos de decisión de Markov (MDP) sirven para modelar el aprendizaje mediante interacción para conseguir un objetivo. Los MDP comprenden dos elementos:
+		
+		\begin{itemize}
+			\item Agente: es el que aprende y toma decisiones. 
+			\item Entorno: comprende todo lo que es externo al agente e interactúa con el agente.
+		\end{itemize}
+		
+		Cuando el agente toma una decisión, el entorno presenta una nueva situación al agente. Además, le entrega una recompensa. Mediante sus acciones, el agente busca maximizar la recompensa obtenida a lo largo del tiempo. La figura \ref{fig:mdp} refleja estas interacciones.
+		
+		\begin{figure}[H]
+			\centering
+			\includegraphics[width=0.7\linewidth]{figuras/mdp.png}
+			\caption{Interacción entre agente y entorno a través de un proceso de decisión de Markov.}
+			\label{fig:mdp}
+		\end{figure}
+		
+		Sean $\mathcal{S}$, $\mathcal{A}$ y $\mathcal{R}$ los conjuntos de estados, acciones y recompensas, respectivamente, entonces:
+		
+		\begin{align}
+		& p: \mathcal{S} \times \mathcal{R} \times \mathcal{S} \times \mathcal{A} \to [0,1] \nonumber \\
+		& p(s', r \mid s, a) = \Pr\{S_t = s', R_t = r \mid S_{t-1} = s, A_{t-1} = a\} \nonumber \\
+		& \sum_{s' \in \mathcal{S}} \sum_{r \in \mathcal{R}} p(s', r \mid s, a) = 1, \quad \forall s \in \mathcal{S}, a \in \mathcal{A}(s) 
+		\end{align}
+		
+		Donde $s, s' \in \mathcal{S}$, $r \in R$, $a \in A$. A partir de la ecuación anterior, se puede calcular la probabilidad marginal del siguiente estado:
+		
+		\begin{align}
+		& p: \mathcal{S} \times \mathcal{S} \times \mathcal{A} \to [0,1] \nonumber \\
+		& p(s' \mid s, a) = \Pr\{S_t = s' \mid S_{t-1} = s, A_{t-1} = a\} = \sum_{r \in \mathcal{R}} p(s', r \mid s, a) 
+		\end{align}
+		
+		Y la recompensa esperada: 
+		\begin{align}
 		& r: \mathcal{S} \times \mathcal{A} \to \mathbb{R} \nonumber \\
 		& r(s, a) = \mathbb{E}[R_t \mid S_{t-1} = s, A_{t-1} = a] = \sum_{r \in \mathcal{R}} r  \cdot p(r \mid s, a) = \sum_{r \in \mathcal{R}} r \sum_{s' \in \mathcal{S}} p(s', r \mid s, a)
-	\end{align}
-	
-	\subsection{Aprendizajes episódico y continuo}
-	El objetivo del agente es maximizar la recompensa esperada en el largo plazo. Esto implica conocer cómo una acción presente repercute en los sucesivos pasos temporales. Según se tenga un estado final o no, se distingue entre:
-	
-	\begin{itemize}
-		\item Aprendizaje episódico: cada episodio tiene una duración $T$ finita, que no tiene por qué ser fija (p.ej. partidas de ajedrez). La recompensa esperada a maximizar se podría escribir como:
-		
-		\begin{equation}
-		G_t = R_{t+1} + R_{t+2} + \cdots + R_T
-		\end{equation}
-		
-		\item Aprendizaje continuo: las interacciones agente-entorno no tienen un fin o este es muy lejano (p.ej. un robot \textit{pick and place}). En tal caso, la definición anterior podría tomar el valor $\infty$. Para evitarlo, se define la recompensa descontada:
-		
-		\begin{equation}
-		G_t = \sum_{k=0}^{\infty} \gamma^k R_{t+k+1} = R_{t+1} + \gamma \sum_{k=1}^\infty \gamma^{k-1} R_{t+k+1} = R_{t+1} + \gamma G_{t+1}
-		\end{equation}
-		
-		Donde $\gamma$ es el factor de descuento. Si $\gamma < 1$, el sumatorio converge a un valor finito. Cuanto mayor sea el valor de $\gamma$, mayor visión a futuro tendrá el agente.
-	\end{itemize}
-	
-	Se puede adoptar una notación común a ambos problemas:
-	
-	\begin{equation}
-	G_t = \sum_{k=t+1}^{T} \gamma^{k-t-1} R_{k}
-	\end{equation}
-	
-	Donde las condiciones $\gamma=1$ y $T=\infty$ son mutuamente excluyentes y representan los casos episódico y continuo de forma excluyente.
-	
-	\subsection{Políticas y funciones de valor}
-	Una política define la probabilidad de que el agente tome una determinada acción dado un estado. Se denotará por $\pi(a \mid s)$. 
-	
-	Por otro lado, las funciones de valor pueden ser:
-	
-	\begin{itemize}
-		\item Funciones de estado-valor: determinan cómo de bueno es que el agente esté en un determinado estado:
-		
-		\begin{equation}
-		v_\pi(s) = \mathbb{E}_\pi[G_t \mid S_t = s] = \mathbb{E}_\pi \left[ \sum_{k=0}^\infty \gamma^k R_{t+k+1} \;\middle|\; S_t = s \right], \forall s \in \mathcal{S}
-		\end{equation}
-		
-		La función estado-valor óptima es:
-		
-		\begin{equation}
-		v_{*}(s) = \max_{\pi} v_\pi(s), \forall s \in \mathcal{S}
-		\end{equation}
-		
-		\item Funciones de acción-valor: determinan cómo de bueno es que el agente tome una dterminada acción dado un estado:
-		
-		\begin{equation}
-		q_\pi(s, a) = \mathbb{E}_\pi[G_t \mid S_t = s, A_t = a] = \mathbb{E}_\pi \left[ \sum_{k=0}^\infty \gamma^k R_{t+k+1} \;\middle|\; S_t = s, A_t = a \right]
-		\end{equation}
-		
-		Se dice que una política es óptima si $v_*(s) \ge v_\pi(s), \forall s \in S, \forall \pi$. La función acción-valor óptima es:
-		
-		\begin{equation}
-		q_{*}(s,a) = \max_{\pi} q_\pi(s,a) = \mathbb{E}\left[ R_{t+1} + \gamma v_{*}(S_{t+1}) \mid S_t = t, A_t = a \right], \forall s \in \mathcal{S}, a \in \mathcal{A}
-		\end{equation}
-	\end{itemize}
-	
-	A partir de las expresiones anteriores se deduce la ecuación de expectativa de Bellman sobre la función estado-valor:
-	
-	\begin{align}
-	v_\pi(s) &= \mathbb{E}_\pi[G_t \mid S_t = s] = \mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_t = s] \nonumber \\
-	&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_t = s, A_t = a] && \text{(Ley de la probabilidad total)} \nonumber \\
-	&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s' \in \mathcal{S}} \sum_{r \in \mathcal{R}} p(s', r \mid s, a) \cdot \nonumber \\
-	&\qquad\mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_t = s, A_t = a, S_{t+1} = s', R_{t+1} = r] && \text{(Ley de la probabilidad total)} \nonumber \\
-	&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s',r} p(s', r \mid s, a) \mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_{t+1} = s'] && \text{(Propiedad Markoviana)} \nonumber \\
-	&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s',r} p(s', r \mid s, a) \mathbb{E}_\pi[r+ \gamma G_{t+1} \mid S_{t+1} = s'] && \text{(Propiedad Markoviana)} \nonumber\\
-	&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s',r} p(s', r \mid s, a) \left[ r + \gamma \mathbb{E}_\pi[G_{t+1} \mid S_{t+1} = s'] \right] \nonumber \\
-	&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s',r} p(s', r \mid s, a) \left[ r + \gamma v_{\pi}(s') \right]
-	\end{align}
-	
-	Análogamente, se puede obtener la ecuación de optimalidad de Bellman sobre la función estado-valor (nótese que la función estado-valor óptima corresponde con seguir la política óptima partiendo de la acción que maximiza la recompensa):
-	
-	\begin{align}
-	v_{*}(s) &= \max_{a \in \mathcal{A}(s)} q_{\pi^*}(s, a) \nonumber \\
-	&= \max_a \mathbb{E}_{\pi^*} [G_t \mid S_t = s, A_t = a] \nonumber \\
-	&= \max_a \mathbb{E}_{\pi^*} [R_{t+1} + \gamma G_{t+1} \mid S_t = s, A_t = a] \nonumber \\
-	&= \max_a \mathbb{E} [R_{t+1} + \gamma v_{*}(S_{t+1}) \mid S_t = s, A_t = a] \nonumber \\
-	&= \max_{a} \sum_{s', r} p(s', r \mid s, a) \left[ r + \gamma v_{*}(s') \right]
-	\end{align}
-	
-	Las mismas ecuaciones de Bellman se pueden deducir para la función acción-valor:
-	
-	\begin{align}
-	& q_{\pi}(s,a) = \mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_t = s, A_t = a] = \sum_{s',r} p(s', r \mid s, a) \left[ r + \gamma v_{\pi}(s') \right] \\
-	& q_*(s,a) = \mathbb{E}_\pi[R_{t+1} + \gamma \max_{a'} q_*(S_{t+1}, a') \mid S_t = s, A_t = a] = \sum_{s',r} p(s', r \mid s, a) \left[ r + \gamma \max_{a'} q_*(s',a') \right]
-	\end{align}
-	
-	Conocido el valor de $v_*(s)$, bastaría con mirar el siguiente estado con ese valor esperado y seleccionar la acción que conduce a dicho estado. Como la información a largo plazo está codificada en la propia función estado-valor óptima, moverse de forma codiciosa (\textit{greedy}), es decir, mirando solo al siguiente instante, ya implica tener en cuenta el futuro. Conocido $q_*(s,a)$, el problema es aún más fácil ya que no haría falta conocer que acción conduce al siguiente estado. Tan solo habría que seleccionar la acción cuyo valor sea óptimo. \\
-	
-	Lógicamente, resolver las ecuaciones de Bellman puede no ser factible debido a que se necesitaría memoria y potencia computacional infinitas. Por lo tanto, se usan aproximaciones de las funciones estado-valor y acción-valor. Aunque los resultados son subóptimos, suelen funcionar razonablemente bien. Las políticas óptimas resultantes tienden a poner más esfuerzo en aprender de los estados que ocurren frecuente y menos esfuerzo en los menos habituales.
-	
-	\section{Aprendizaje por diferencias temporales}
-	Idealmente, la política óptima se deriva de las ecuaciones de optimalidad de Bellman. Sin embargo, su resolución no es trivial, por lo que aparecen distintos esquemas para aproximar $v_*(s)$ y $q_*(s,a)$:
-	
-	\begin{itemize}
-		\item Métodos de Monte-Carlo: no requieren un modelo del entorno. Las funciones de valor aproximadas se actualizan al final de cada episodio, estimando la esperanza a partir de una muestra.
-		\item Programación dinámica: no requiere esperar al final de cada episodio para su actualización (permiten aprendizaje continuo), ya que calcula la esperanza exacta de las funciones de valor al suponer conocido un modelo del entorno.
-		\item Diferencias temporales: aproximan las funciones valor sin necesidad de esperar el final de cada episodio ni de un modelo del entorno.
-	\end{itemize}
-	
-	El enfoque de diferencias temporales combina las ventajas de los métodos de Monte-Carlo y la programación dinámica, haciéndolo flexible ante diversas situaciones.
-	
-	\subsection{Predicción TD}
-	El problema de predicción consiste en estimar la función de valor $v_\pi$ a partir de la experiencia siguiendo una política $\pi$. El método TD(0) es el más simple de todos. Actualiza su estimación en el instante $t+1$ utilizando la recompensa inmediata observada y la estimación de $v_\pi$ en el siguiente estado:
-	
-	\begin{equation}
-	V(S_t) \leftarrow V(S_t) + \alpha \left[ R_{t+1} + \gamma V(S_{t+1}) - V(S_t) \right] = V(S_t) + \alpha \delta_t
-	\end{equation}
-	
-	Donde $\alpha \in (0, 1]$ es la tasa de aprendizaje y $\delta_t = R_{t+1} + \gamma V(S_{t+1}) - V(S_t)$ es el error TD. Este último mide la diferencia entre la estimación actual, $V(S_t)$, y una estimación mejorada respaldada por la experiencia, $R_{t+1} + \gamma V(S_{t+1})$.
-	
-	Otra ventaja de los métodos TD frente a Monte-Carlo es que son más robustos ante acciones arbitrarias de exploración. En los métodos de Monte-Carlo, este tipo de acciones podría distorsionar el valor de la esperanza, por lo que habría que descartar la iteración. Los métodos TD, por contra, aprenden de cada transición. \\
-	
-	Los métodos TD convergen a la media de $v_\pi$ si se sigue una política fija, $\pi$, y $\alpha$ es constante y suficientemente pequeño. La probabilidad de convergencia es 1 si $\alpha$ se reduce gradualmente, cumpliendo ciertas condiciones. No obstante, muchas de las pruebas de convergencia solo aplican al caso tabular.\\
-	
-	Respecto a la velocidad de convergencia, los métodos TD convergen más rápido que Monte-Carlo de forma práctica, aunque no haya una demostración matemática. Esto ocurre para el formato online y batch (acumulando el error TD sobre todas las muestras disponibles antes de actualizar).
-	
-	\subsection{Control TD}
-	El problema de control consiste en estimar $q_\pi(s,a)$. Por lo tanto, la actualización depende de los pares estado-acción. Existen distintas variantes de los métodos TD para este tipo de problemas:
-	
-	\begin{itemize}
-		\item SARSA: es el caso más simple:
-		
-		\begin{equation}
-		Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma Q(S_{t+1}, A_{t+1}) - Q(S_t, A_t) \right]
-		\end{equation}
-		
-		Es un algoritmo on-policy (la misma política seguida para la transición de estados es la que se actualiza) en el que continuamente se estima $q_\pi$ a la vez que se va modificando la política $\pi$ para que tienda a la codicia. Se empieza con una política que permite la exploración con una cierta probabilidad. Cada vez se favorece más las decisiones de explotación (seleccionar las recompensas que maximizan las acciones) en contra de dicha exploración.
-		
-		\item Q-learning: es un algoritmo off-policy que converge a $q_*$:
-		
-		\begin{equation}
-		Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma \max_a Q(S_{t+1}, a) - Q(S_t, A_t) \right]
-		\end{equation}
-		
-		La política de comportamiento para moverse por los estados puede elegirse libremente, lo que favorece la exploración. A medida que se van observando los estados, la política objetivo aprende a seleccionar la acción que maximiza la recompensa. Una ventaja de los métodos off-policy es que no importa cómo se han generado las muestras a la hora de actualizar la política objetivo, ya que ambas están desagregadas. Los métodos on-policy se actualizan de acuerdo a los estados explorados según la política actual. Es decir, no pueden reutilizar datos pasados porque fueron generados con una política diferente. 
-		
-		\item Expected SARSA:
-		
-		\begin{align}
-		Q(S_t, A_t) &\leftarrow Q(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma \mathbb{E}_\pi \left[ Q(S_{t+1}, A_{t+1}) \mid S_{t+1} \right] - Q(S_t, A_t) \right] \nonumber \\
-		&= Q(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma \sum_a \pi(a|S_{t+1}) Q(S_{t+1}, a) - Q(S_t, A_t) \right]
 		\end{align}
 		
-		En vez de evaluar el siguiente par estado-acción, usa su valor esperado. La política objetivo $\pi$ puede ser la misma que la de comportamiento (on-policy) o distinta (off-policy). Reduce la varianza asociada a elegir una única acción $A_{t+1}$ de forma aleatoria a cambio de un mayor coste computacional.
+		\subsubsection{Aprendizajes episódico y continuo}
+		El objetivo del agente es maximizar la recompensa esperada en el largo plazo. Esto implica conocer cómo una acción presente repercute en los sucesivos pasos temporales. Según se tenga un estado final o no, se distingue entre:
 		
-		\item Double-Q-learning: utiliza dos funciones de acción-valor para desacoplar la acción de la evaluación:
+		\begin{itemize}
+			\item Aprendizaje episódico: cada episodio tiene una duración $T$ finita, que no tiene por qué ser fija (p.ej. partidas de ajedrez). La recompensa esperada a maximizar se podría escribir como:
+			
+			\begin{equation}
+			G_t = R_{t+1} + R_{t+2} + \cdots + R_T
+			\end{equation}
+			
+			\item Aprendizaje continuo: las interacciones agente-entorno no tienen un fin o este es muy lejano (p.ej. un robot \textit{pick and place}). En tal caso, la definición anterior podría tomar el valor $\infty$. Para evitarlo, se define la recompensa descontada:
+			
+			\begin{equation}
+			G_t = \sum_{k=0}^{\infty} \gamma^k R_{t+k+1} = R_{t+1} + \gamma \sum_{k=1}^\infty \gamma^{k-1} R_{t+k+1} = R_{t+1} + \gamma G_{t+1}
+			\end{equation}
+			
+			Donde $\gamma$ es el factor de descuento. Si $\gamma < 1$, el sumatorio converge a un valor finito. Cuanto mayor sea el valor de $\gamma$, mayor visión a futuro tendrá el agente.
+		\end{itemize}
+		
+		Se puede adoptar una notación común a ambos problemas:
+		
+		\begin{equation}
+		G_t = \sum_{k=t+1}^{T} \gamma^{k-t-1} R_{k}
+		\end{equation}
+		
+		Donde las condiciones $\gamma=1$ y $T=\infty$ son mutuamente excluyentes y representan los casos episódico y continuo de forma excluyente.
+		
+		\subsubsection{Políticas y funciones de valor}
+		Una política define la probabilidad de que el agente tome una determinada acción dado un estado. Se denotará por $\pi(a \mid s)$. 
+		
+		Por otro lado, las funciones de valor pueden ser:
+		
+		\begin{itemize}
+			\item Funciones de estado-valor: determinan cómo de bueno es que el agente esté en un determinado estado:
+			
+			\begin{equation}
+			v_\pi(s) = \mathbb{E}_\pi[G_t \mid S_t = s] = \mathbb{E}_\pi \left[ \sum_{k=0}^\infty \gamma^k R_{t+k+1} \;\middle|\; S_t = s \right], \forall s \in \mathcal{S}
+			\end{equation}
+			
+			La función estado-valor óptima es:
+			
+			\begin{equation}
+			v_{*}(s) = \max_{\pi} v_\pi(s), \forall s \in \mathcal{S}
+			\end{equation}
+			
+			\item Funciones de acción-valor: determinan cómo de bueno es que el agente tome una dterminada acción dado un estado:
+			
+			\begin{equation}
+			q_\pi(s, a) = \mathbb{E}_\pi[G_t \mid S_t = s, A_t = a] = \mathbb{E}_\pi \left[ \sum_{k=0}^\infty \gamma^k R_{t+k+1} \;\middle|\; S_t = s, A_t = a \right]
+			\end{equation}
+			
+			Se dice que una política es óptima si $v_*(s) \ge v_\pi(s), \forall s \in S, \forall \pi$. La función acción-valor óptima es:
+			
+			\begin{equation}
+			q_{*}(s,a) = \max_{\pi} q_\pi(s,a) = \mathbb{E}\left[ R_{t+1} + \gamma v_{*}(S_{t+1}) \mid S_t = t, A_t = a \right], \forall s \in \mathcal{S}, a \in \mathcal{A}
+			\end{equation}
+		\end{itemize}
+		
+		A partir de las expresiones anteriores se deduce la ecuación de expectativa de Bellman sobre la función estado-valor:
 		
 		\begin{align}
-		& Q_1(S_t, A_t) \leftarrow Q_1(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma Q_2(S_{t+1}, \arg\max_a Q_1(S_{t+1}, a)) - Q_1(S_t, A_t) \right] \\
-		& Q_2(S_t, A_t) \leftarrow Q_2(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma Q_1(S_{t+1}, \arg\max_a Q_2(S_{t+1}, a)) - Q_2(S_t, A_t) \right]
+		v_\pi(s) &= \mathbb{E}_\pi[G_t \mid S_t = s] = \mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_t = s] \nonumber \\
+		&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_t = s, A_t = a] && \text{(Ley de la probabilidad total)} \nonumber \\
+		&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s' \in \mathcal{S}} \sum_{r \in \mathcal{R}} p(s', r \mid s, a) \cdot \nonumber \\
+		&\qquad\mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_t = s, A_t = a, S_{t+1} = s', R_{t+1} = r] && \text{(Ley de la probabilidad total)} \nonumber \\
+		&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s',r} p(s', r \mid s, a) \mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_{t+1} = s'] && \text{(Propiedad Markoviana)} \nonumber \\
+		&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s',r} p(s', r \mid s, a) \mathbb{E}_\pi[r+ \gamma G_{t+1} \mid S_{t+1} = s'] && \text{(Propiedad Markoviana)} \nonumber\\
+		&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s',r} p(s', r \mid s, a) \left[ r + \gamma \mathbb{E}_\pi[G_{t+1} \mid S_{t+1} = s'] \right] \nonumber \\
+		&=\sum_{a \in \mathcal{A}} \pi(a \mid s) \sum_{s',r} p(s', r \mid s, a) \left[ r + \gamma v_{\pi}(s') \right]
 		\end{align}
 		
-		El Q-learning es optimista cuando las recompensas son ruidosas. Intuitivamente, se puede imaginar la situación en que los valores reales $q(s,a)$ son todos cero, pero sus estimaciones $Q(s,a)$ presentan incertidumbre. El máximo de los valores reales es cero, mientras que el máximo estimado es positivo. Esto se conoce como sesgo de maximización. \\
+		Análogamente, se puede obtener la ecuación de optimalidad de Bellman sobre la función estado-valor (nótese que la función estado-valor óptima corresponde con seguir la política óptima partiendo de la acción que maximiza la recompensa):
 		
-		El double-Q-learning aborda este problema calculando simultáneamente dos funciones acción-valor: $Q_1(s,a)$ y $Q_2(s,a)$. Pero en cada iteración se actualiza solamente una de ellas a partir de la evaluación según la otra. Si una recompensa es ruidosa en torno a cero, será raro que tome valores positivos constantemente. Por ejemplo, para la primera muestra se actualiza $Q_1$, que ve una recompensa muy alta. Si se usara Q-learning, otros pares estado-acción aumentarían su valor solamente por la expectativa de volver a repetir la jugada. Sin embargo, $Q_2$ evalúa el par estado-acción sin haber visto tal recompensa. Su percepción será que dicho par estado-acción no tiene tanto valor. Este proceso se repite actualizando arbitrariamente cada función.
+		\begin{align}
+		v_{*}(s) &= \max_{a \in \mathcal{A}(s)} q_{\pi^*}(s, a) \nonumber \\
+		&= \max_a \mathbb{E}_{\pi^*} [G_t \mid S_t = s, A_t = a] \nonumber \\
+		&= \max_a \mathbb{E}_{\pi^*} [R_{t+1} + \gamma G_{t+1} \mid S_t = s, A_t = a] \nonumber \\
+		&= \max_a \mathbb{E} [R_{t+1} + \gamma v_{*}(S_{t+1}) \mid S_t = s, A_t = a] \nonumber \\
+		&= \max_{a} \sum_{s', r} p(s', r \mid s, a) \left[ r + \gamma v_{*}(s') \right]
+		\end{align}
 		
-	\end{itemize}
+		Las mismas ecuaciones de Bellman se pueden deducir para la función acción-valor:
+		
+		\begin{align}
+		& q_{\pi}(s,a) = \mathbb{E}_\pi[R_{t+1} + \gamma G_{t+1} \mid S_t = s, A_t = a] = \sum_{s',r} p(s', r \mid s, a) \left[ r + \gamma v_{\pi}(s') \right] \\
+		& q_*(s,a) = \mathbb{E}_\pi[R_{t+1} + \gamma \max_{a'} q_*(S_{t+1}, a') \mid S_t = s, A_t = a] = \sum_{s',r} p(s', r \mid s, a) \left[ r + \gamma \max_{a'} q_*(s',a') \right]
+		\end{align}
+		
+		Conocido el valor de $v_*(s)$, bastaría con mirar el siguiente estado con ese valor esperado y seleccionar la acción que conduce a dicho estado. Como la información a largo plazo está codificada en la propia función estado-valor óptima, moverse de forma codiciosa (\textit{greedy}), es decir, mirando solo al siguiente instante, ya implica tener en cuenta el futuro. Conocido $q_*(s,a)$, el problema es aún más fácil ya que no haría falta conocer que acción conduce al siguiente estado. Tan solo habría que seleccionar la acción cuyo valor sea óptimo. \\
+		
+		Lógicamente, resolver las ecuaciones de Bellman puede no ser factible debido a que se necesitaría memoria y potencia computacional infinitas. Por lo tanto, se usan aproximaciones de las funciones estado-valor y acción-valor. Aunque los resultados son subóptimos, suelen funcionar razonablemente bien. Las políticas óptimas resultantes tienden a poner más esfuerzo en aprender de los estados que ocurren frecuente y menos esfuerzo en los menos habituales.
+		
+		\subsection{Aprendizaje por diferencias temporales}
+		Idealmente, la política óptima se deriva de las ecuaciones de optimalidad de Bellman. Sin embargo, su resolución no es trivial, por lo que aparecen distintos esquemas para aproximar $v_*(s)$ y $q_*(s,a)$:
+		
+		\begin{itemize}
+			\item Métodos de Monte-Carlo: no requieren un modelo del entorno. Las funciones de valor aproximadas se actualizan al final de cada episodio, estimando la esperanza a partir de una muestra.
+			\item Programación dinámica: no requiere esperar al final de cada episodio para su actualización (permiten aprendizaje continuo), ya que calcula la esperanza exacta de las funciones de valor al suponer conocido un modelo del entorno.
+			\item Diferencias temporales: aproximan las funciones valor sin necesidad de esperar el final de cada episodio ni de un modelo del entorno.
+		\end{itemize}
+		
+		El enfoque de diferencias temporales combina las ventajas de los métodos de Monte-Carlo y la programación dinámica, haciéndolo flexible ante diversas situaciones.
+		
+		\subsubsection{Predicción TD}
+		El problema de predicción consiste en estimar la función de valor $v_\pi$ a partir de la experiencia siguiendo una política $\pi$. El método TD(0) es el más simple de todos. Actualiza su estimación en el instante $t+1$ utilizando la recompensa inmediata observada y la estimación de $v_\pi$ en el siguiente estado:
+		
+		\begin{equation}
+		V(S_t) \leftarrow V(S_t) + \alpha \left[ R_{t+1} + \gamma V(S_{t+1}) - V(S_t) \right] = V(S_t) + \alpha \delta_t
+		\end{equation}
+		
+		Donde $\alpha \in (0, 1]$ es la tasa de aprendizaje y $\delta_t = R_{t+1} + \gamma V(S_{t+1}) - V(S_t)$ es el error TD. Este último mide la diferencia entre la estimación actual, $V(S_t)$, y una estimación mejorada respaldada por la experiencia, $R_{t+1} + \gamma V(S_{t+1})$.
+		
+		Otra ventaja de los métodos TD frente a Monte-Carlo es que son más robustos ante acciones arbitrarias de exploración. En los métodos de Monte-Carlo, este tipo de acciones podría distorsionar el valor de la esperanza, por lo que habría que descartar la iteración. Los métodos TD, por contra, aprenden de cada transición. \\
+		
+		Los métodos TD convergen a la media de $v_\pi$ si se sigue una política fija, $\pi$, y $\alpha$ es constante y suficientemente pequeño. La probabilidad de convergencia es 1 si $\alpha$ se reduce gradualmente, cumpliendo ciertas condiciones. No obstante, muchas de las pruebas de convergencia solo aplican al caso tabular.\\
+		
+		Respecto a la velocidad de convergencia, los métodos TD convergen más rápido que Monte-Carlo de forma práctica, aunque no haya una demostración matemática. Esto ocurre para el formato online y batch (acumulando el error TD sobre todas las muestras disponibles antes de actualizar).
+		
+		\subsubsection{Control TD}
+		El problema de control consiste en estimar $q_\pi(s,a)$. Por lo tanto, la actualización depende de los pares estado-acción. Existen distintas variantes de los métodos TD para este tipo de problemas:
+		
+		\begin{itemize}
+			\item SARSA: es el caso más simple:
+			
+			\begin{equation}
+			Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma Q(S_{t+1}, A_{t+1}) - Q(S_t, A_t) \right]
+			\end{equation}
+			
+			Es un algoritmo on-policy (la misma política seguida para la transición de estados es la que se actualiza) en el que continuamente se estima $q_\pi$ a la vez que se va modificando la política $\pi$ para que tienda a la codicia. Se empieza con una política que permite la exploración con una cierta probabilidad. Cada vez se favorece más las decisiones de explotación (seleccionar las recompensas que maximizan las acciones) en contra de dicha exploración.
+			
+			\item Q-learning: es un algoritmo off-policy que converge a $q_*$:
+			
+			\begin{equation}
+			Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma \max_a Q(S_{t+1}, a) - Q(S_t, A_t) \right]
+			\end{equation}
+			
+			La política de comportamiento para moverse por los estados puede elegirse libremente, lo que favorece la exploración. A medida que se van observando los estados, la política objetivo aprende a seleccionar la acción que maximiza la recompensa. Una ventaja de los métodos off-policy es que no importa cómo se han generado las muestras a la hora de actualizar la política objetivo, ya que ambas están desagregadas. Los métodos on-policy se actualizan de acuerdo a los estados explorados según la política actual. Es decir, no pueden reutilizar datos pasados porque fueron generados con una política diferente. 
+			
+			\item Expected SARSA:
+			
+			\begin{align}
+			Q(S_t, A_t) &\leftarrow Q(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma \mathbb{E}_\pi \left[ Q(S_{t+1}, A_{t+1}) \mid S_{t+1} \right] - Q(S_t, A_t) \right] \nonumber \\
+			&= Q(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma \sum_a \pi(a|S_{t+1}) Q(S_{t+1}, a) - Q(S_t, A_t) \right]
+			\end{align}
+			
+			En vez de evaluar el siguiente par estado-acción, usa su valor esperado. La política objetivo $\pi$ puede ser la misma que la de comportamiento (on-policy) o distinta (off-policy). Reduce la varianza asociada a elegir una única acción $A_{t+1}$ de forma aleatoria a cambio de un mayor coste computacional.
+			
+			\item Double-Q-learning: utiliza dos funciones de acción-valor para desacoplar la acción de la evaluación:
+			
+			\begin{align}
+			& Q_1(S_t, A_t) \leftarrow Q_1(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma Q_2(S_{t+1}, \arg\max_a Q_1(S_{t+1}, a)) - Q_1(S_t, A_t) \right] \\
+			& Q_2(S_t, A_t) \leftarrow Q_2(S_t, A_t) + \alpha \left[ R_{t+1} + \gamma Q_1(S_{t+1}, \arg\max_a Q_2(S_{t+1}, a)) - Q_2(S_t, A_t) \right]
+			\end{align}
+			
+			El Q-learning es optimista cuando las recompensas son ruidosas. Intuitivamente, se puede imaginar la situación en que los valores reales $q(s,a)$ son todos cero, pero sus estimaciones $Q(s,a)$ presentan incertidumbre. El máximo de los valores reales es cero, mientras que el máximo estimado es positivo. Esto se conoce como sesgo de maximización. \\
+			
+			El double-Q-learning aborda este problema calculando simultáneamente dos funciones acción-valor: $Q_1(s,a)$ y $Q_2(s,a)$. Pero en cada iteración se actualiza solamente una de ellas a partir de la evaluación según la otra. Si una recompensa es ruidosa en torno a cero, será raro que tome valores positivos constantemente. Por ejemplo, para la primera muestra se actualiza $Q_1$, que ve una recompensa muy alta. Si se usara Q-learning, otros pares estado-acción aumentarían su valor solamente por la expectativa de volver a repetir la jugada. Sin embargo, $Q_2$ evalúa el par estado-acción sin haber visto tal recompensa. Su percepción será que dicho par estado-acción no tiene tanto valor. Este proceso se repite actualizando arbitrariamente cada función.
+			
+		\end{itemize}
+		
+		\subsection{Métodos de gradiente de política}
+		Los métodos de control expuestos en la sección anterior se centran en aproximar la función acción-valor. Este tipo de enfoques se encuadra en lo que se conoce como métodos acción-valor: aprenden los valores de las acciones y selecciona una acción basándose en los valores aprendidos. La política se deriva implícitamente de la maximización $\arg\max_a Q(s,a)$. \\
+		
+		Por otro lado, los métodos anteriores son tabulares: guardan registros con el valor de cada pareja acción-estado y los van actualizando. A medida que los espacios de estados y acciones crecen, los requisitos de memoria y tiempo para pasar por todos los estados se vuelven inasumibles. Los métodos aproximados buscan sustituir estas tablas por funciones matemáticas parametrizadas (p.ej. una red neuronal). \\
+		
+		Los métodos de gradiente de política aprenden directamente los parámetros de una política, por lo que no necesitan consultar las funciones de valor para seleccionar una acción. Esto no significa que las funciones de valor no sean necesarias para aprender la política. El objetivo de los métodos de gradiente de política es obtener los parámetros que maximicen una medida de rendimiento $J(\theta)$:
+		
+		\begin{align}
+		& \pi(a \mid s ; \theta) = \Pr\{A_t = a \mid S_t = s; \theta_t = \theta \} \\
+		& \theta_{t+1} = \theta_t + \alpha \widehat{\nabla_\theta J(\theta_t)} && (\text{Ascenso del gradiente})
+		\end{align}
+		
+		Los métodos que, además, aprenden una aproximación de las funcinoes de valor se denominan actor-critic. El actor se relaciona con la política aprendida, mientras que el crítico se refiere a la función de valor. \\
+		
+		Los métodos de gradiente de política presentan algunas ventajas frente a los métodos acción-valor:
+		
+		\begin{itemize}
+			\item Permiten aproximar políticas deterministas sin depender de parámetros de temperatura y exploración que son difíciles de ajustar.
+			\item Permiten aproximar políticas estocásticas, superando a los métodos acción-valor que tienden a elegir $\arg\max_aQ(s,a)$.
+			\item El cálculo de la política a veces puede ser más simple que el de la función acción-valor, que depende de la recompensa futura que se espera obtener.
+			\item Se puede introducir conocimiento previo en la parametrización de la política.
+			\item Las probabilidades de acción cambian de forma suave debido a que las políticas son continuas. En los métodos acción-valor se pueden dar saltos bruscos para cambios pequeños en los valores de las acciones debido a la función máximo.
+		\end{itemize}
+		
+		Para el caso episódico ($\gamma=1$), la medida de rendimiento es lo bien que está posicionado el algoritmo al inicio de cada episodio:
+		
+		\begin{equation}
+		J(\theta) = v_{\pi_\theta}(s_0)
+		\end{equation}
+		
+		Donde $v_{\pi_\theta}$ es la función estado-valor real para la política $\pi_\theta$. El gradiente del rendimiento se apoya en el teorema del gradiente de política:
+		
+		\begin{align}
+		\nabla v_\pi(s) &= \nabla \left[ \sum_a \pi(a|s)q_\pi(s, a) \right] , \quad \forall s \in \mathcal{S} && \text{(Ley de la probabilidad total)} \nonumber \\
+		&= \sum_a \left[ \nabla \pi(a|s) q_\pi(s,a) + \pi(a|s) \nabla q_\pi(s,a) \right] && \text{(Derivada del producto)} \nonumber \\
+		&= \sum_a \left[ \nabla \pi(a|s) q_\pi(s,a) + \pi(a|s) \nabla \sum_{s',r} p(s', r|s, a)(r + v_\pi(s')) \right] && \text{(Ecuación de Bellman)} \nonumber \\
+		&= \sum_a \left[ \nabla \pi(a|s) q_\pi(s,a) + \pi(a|s) \sum_{s'} p(s'|s, a) \nabla v_\pi(s') \right] && \text{(Probabilidad marginal de $s'$)} \nonumber \\
+		&= \phi(s) + \sum_{s'} \underbrace{\sum_a \pi(a|s) p(s'|s, a)}_{\Pr(s \to s', 1, \pi)} \nabla v_\pi(s') && \left( \phi(s) = \sum_a \nabla \pi(a|s) q_\pi(s,a) \right) \nonumber \\
+		&= \phi(s) + \sum_{s'} \text{Pr}(s \to s', 1, \pi) \left[ \phi(s') + \sum_{s''} \text{Pr}(s' \to s'', 1, \pi) \nabla v_\pi(s'') \right] \nonumber \\
+		&= \phi(s) + \sum_{s'} \text{Pr}(s \to s', 1, \pi) \phi(s') \nonumber \\
+		&\qquad + \sum_{s''} \underbrace{\left( \sum_{s'} \text{Pr}(s \to s', 1, \pi) \text{Pr}(s' \to s'', 1, \pi) \right)}_{\Pr(s \to s'', 2, \pi)} \nabla v_\pi(s'') \nonumber \\
+		&=\sum_{x \in \mathcal{S}} \sum_{k=0}^\infty \Pr(s \to x, k, \pi) \phi(x)
+		\end{align}
+		
+		Aplicado al rendimiento para el caso episódico:
+		
+		\begin{align}
+		\nabla J(\theta) &= \nabla v_\pi(s_0) \nonumber \\
+		&= \sum_s \underbrace{\sum_{k=0}^\infty \text{Pr}(s_0 \to s, k, \pi)}_{\eta(s)} \sum_a \nabla \pi(a|s) q_\pi(s, a) \nonumber \\
+		&= \sum_{s'} \eta(s') \sum_s \underbrace{\frac{\eta(s)}{\sum_{s'} \eta(s')}}_{\mu(s)} \sum_a \nabla \pi(a|s) q_\pi(s, a) && \text{(Normalización)} \nonumber \\
+		&\propto \sum_s \mu(s) \sum_a \nabla \pi(a|s) q_\pi(s, a) && \left(\sum_{s'} \eta(s') = \text{cte} \right)
+		\end{align}
+		
+		\subsubsection{REINFORCE}
+		El sumatorio del teorema del gradiente de política puede ser inviable de calcular analíticamente. Una solución pasa por realizar una aproximación de Monte-Carlo mediante la esperanza sobre un conjunto de muestras. Dado que $\mu(s)$ representa la proporción de veces que se visita cada estado bajo la política $\pi$ (i.e. la probabilidad de cada estado):
+		
+		\begin{equation}
+		\nabla_\theta J(\theta) \propto \sum_s \mu(s) \sum_a q_\pi(s, a) \nabla_\theta \pi(a|s; \theta) = \mathbb{E}_{\pi}\left[ \sum_a q_\pi(S_t, a) \nabla_\theta \pi(a \mid S_t ; \theta) \right]
+		\end{equation}
+		
+		Es decir, obteniendo muestras de $\sum_a q_\pi(S_t, a) \nabla_\theta \pi(a \mid S_t ; \theta)$ se podría aproximar la esperanza anterior. Dado que el espacio de acciones puede tener una elevada dimensión, se aproxima el sumatorio por otra esperanza (nótese que es necesario conocer la probabilidad con la que ocurre cada acción, $\pi(a \mid S_t ; \theta)$:
+		
+		\begin{align}
+		\nabla_\theta J(\theta) &\propto \mathbb{E}_{\pi}\left[ \pi(a \mid S_t ; \theta) \sum_a q_\pi(S_t, a) \frac{\nabla_\theta \pi(a \mid S_t ; \theta)}{\pi(a \mid S_t ; \theta)} \right] \nonumber \\
+		&= \mathbb{E}_{S_t \sim \mu}\left[ \mathbb{E}_{A_t \sim \pi} \left[q_\pi(S_t, A_t) \nabla_\theta \log \pi(A_t \mid S_t; \theta) \mid S_t \right] \right] && (\nabla \log(x) = \frac{\nabla x}{x}) \nonumber \\
+		&= \mathbb{E}_{S_t \sim \mu, A_t \sim \pi}\left[ q_\pi(S_t, A_t) \nabla_\theta \log \pi(A_t \mid S_t; \theta) \right]  && (\text{Ley de la esperanza total}) \nonumber \\
+		&= \mathbb{E}_{S_t, A_t} \left[ \mathbb{E}_\pi [ G_t \mid S_t, A_t ] \nabla_\theta \log \pi(A_t | S_t; \theta) \right] && \left(q_\pi(S_t, A_t) = \mathbb{E}_\pi[G_t \mid S_t, A_t]) \right) \nonumber \\
+		&= \mathbb{E}_{S_t, A_t} \left[ \mathbb{E}_\pi [ G_t \nabla_\theta \log \pi(A_t | S_t; \theta) \mid S_t, A_t ] \right] \nonumber \\
+		&= \mathbb{E}_{S_t, A_t} [ G_t \nabla_\theta \log \pi(A_t | S_t; \theta) ] && (\text{Ley de la esperanza total})
+		\end{align}
+		
+		Aplicando el método de Monte-Carlo sobre la expresión final obtenida se aproxima la esperanza por la muestra de la iteración actual, dando lugar al esquema de actualización por ascenso del gradiente:
+		
+		\begin{equation}
+		\theta_{t+1} = \theta_t + \alpha G_t \nabla_\theta \log(\pi(A_t \mid S_t ; \theta_t))
+		\end{equation}
+		
+		El problema de la ecuación (algoritmo REINFORCE) anterior es que la varianza puede tomar valores altos si la recompensa varía mucho. Una solución es restar una referencia en el gradiente del rendimiento:
+		
+		\begin{align}
+		&\begin{aligned}
+		\nabla_\theta J(\theta) &\propto \sum_s \mu(s) \sum_a \left( q_\pi(s, a) - b(s) \right) \nabla_\theta \pi(a \mid s; \theta) \\
+		&= \mathbb{E}_{\pi}\left[ \sum_a \left( q_\pi(S_t, a) - b(S_t) \right) \nabla_\theta \pi(a \mid S_t ; \theta) \right]
+		\end{aligned} \\
+		&\mathbb{E}_{\pi}\left[ \sum_a b(S_t) \nabla_\theta \pi(a \mid S_t ; \theta) \right] = \mathbb{E}_{\pi}\left[ b(S_t) \nabla_\theta \sum_a \pi(a \mid S_t ; \theta) \right] = \mathbb{E}_{\pi}\left[ b(S_t) \nabla_\theta 1 \right] = 0 \\
+		&V(\nabla_\theta J(\theta)) = \mathbb{E}_\pi\left[ \left( (G_t - b(S_t)) \nabla_\theta \log \pi(A_t \mid S_t; \theta) \right)^2 \right] - \left( \nabla_\theta J(\theta) \right)^2
+		\end{align}
+		
+		El algoritmo anterior se conoce como REINFORCE con línea de base. Cuando $b(S_t) = 0$ se tiene el REINFORCE clásico. Atendiendo a la varianza, solamente el primer término depende de la línea de referencia. Una línea de base conveniente podría ser una aproximación de la función de valor $\hat{v}(S_t, w)$, donde $w$ son los parámetros de la función que la aproxima. El esquema de aprendizaje de este método se podría resumir en:
+		
+		\begin{equation}
+		\theta_{t+1} = \theta_t + \alpha \left( G_t - b(S_t) \right) \nabla_\theta \log \pi(A_t \mid S_t ; \theta_t)
+		\end{equation}
+		
+		\subsubsection{Actor-critic}
+		El algoritmo REINFORCE depende del valor de $G_t$ calculado al final del episodio. Por lo tanto, puede pasar mucho tiempo hasta que se produzca una actualización de los parámetros. Siguiendo la filosofía del aprendizaje por diferencias temporales, se podría mirar la aproximación de la función estado-valor antes y después de ejecutar la acción para realizar una actualización a partir de una estimación de la recompensa $G_t$:
+		
+		\begin{align}
+		\theta_{t+1} &= \theta_t + \alpha \left( R_{t+1} + \gamma \hat{v}(S_{t+1}, w) - \hat{v}(S_t, w) \nabla_\theta \log \pi(A_t, \mid S_t ; \theta_t) \right) \nonumber \\ 
+		&= \theta_t + \alpha \delta_t \nabla_\theta \log \pi(A_t, \mid S_t ; \theta_t)
+		\end{align}
+		
+		\subsubsection{Soft actor-critic}
+		El algoritmo soft actor-critic es un método off-policy que busca maximizar la recompensa junto con la entropía de la política. De forma genérica:
+		
+		\begin{equation}
+		J(\theta) = \mathbb{E}_{S_t, A_t} \left[ \sum_{t=0}^{\infty} \gamma^t \left( R_{t+1} - \alpha \log \pi(A_t \mid S_t ; \theta) \right) \right]
+		\end{equation}
+		
+		Donde $\alpha$ es un parámetro de temperatura que regula la importancia del término de entropía. Esta formulación presenta varias ventajas:
+		
+		\begin{itemize}
+			\item La exploración del entorno es más amplia, dejando de lado caminos muy complejos.
+			\item La política captura múltiples maneras de hacer las tareas cercanas a la óptima. Si hubiera varias acciones factibles para resolver una situación, todas tenderían a tener la misma probabilidad.
+		\end{itemize}
+		
+		El problema anterior se puede resolver para problemas tabulares mediante el algoritmo de iteración de política suave, consistente en repetir los siguientes pasos hasta la convergencia a la política óptima\cite{haarnoja2018soft}:
+		
+		\begin{enumerate}
+			\item Evaluación suave de la política:
+			
+			\begin{align}
+			& Q^{k+1}(s, a) = \mathcal{T}^\pi Q^k(s, a) \\
+			& \begin{aligned}
+			\mathcal{T}^\pi Q(s, a) &= \mathbb{E}_\pi \left[ R_{t+1} + \gamma V(S_{t+1}) \mid S_t = s, A_t = a \right] && (\text{Operador de Bellman}) \\
+			&= \mathbb{E}_\pi \left[ R_{t+1} \mid S_t = s, A_t = a \right] + \gamma \mathbb{E}_\pi \left[ V(S_{t+1}) \mid S_t = s, A_t = a \right] \\
+			&= r(s,a) + \gamma \mathbb{E}_\pi \left[ V(S_{t+1}) \mid S_t = s, A_t = a \right]
+			\end{aligned} \\
+			& V(s) = \mathbb{E}_{A_t} \left[ Q(S_t, A_t) - \alpha \log \pi(A_t \mid S_t) \mid S_t = s \right] \label{eq:estado_valor_obj}
+			\end{align}
+			
+			\item Mejora suave de la política: estima la nueva política minimizando la divergencia de Kullback-Leibler con $\frac{\exp(Q_{\pi_t}(S_t, \cdot))}{Z_{\pi_t}(S_t)}$:
+			
+			\begin{equation}
+			\pi_{t+1} = \arg\min_{\pi' \in \Pi} D_{KL} \left( \pi'(\cdot \mid S_t) \middle\| \frac{\exp(Q_{\pi_t}(S_t, \cdot))}{Z_{\pi_t}(S_t)} \right)
+			\end{equation}
+			
+			Esto asegura que $Q_{\pi_{t}}(s, a) \ge Q_{\pi_{t}}(s, a) \quad \forall s, a \in \mathcal{S} \times \mathcal{A}$.
+			
+		\end{enumerate}
+		
+		Los espacios de acciones y estados continuos y grandes requieren aproximar la iteración de política suave. Es decir, se usan redes neuronales para estimar por descenso del gradiente los parámetros de:
+		
+		\begin{itemize}
+			\item Función estado-valor: podría obtenerse a partir de la ecuación \ref{eq:estado_valor_obj}, pero es preferible entrenar una red por motivos de estabilidad. La idea es minimizar la diferencia entre este valor teórico y el aproximado por la red de parámetros $\psi$:
+			
+			\begin{align}
+			& J_V(\psi) = \mathbb{E}_{S_t \sim \mathcal{D}} \left[ \frac{1}{2} \left( V_\psi(S_t) - \mathbb{E}_{A_t \sim \pi_\phi} \left[ Q_\theta(S_t, A_t) - \alpha \log \pi_\phi(A_t \mid S_t) \right] \right)^2 \right] \\
+			& \nabla_\psi J_V(\psi) = \mathbb{E}_{S_t \sim \mathcal{D}} \left[ \nabla_\psi V_\psi(S_t) \left( V_\psi(S_t) - Q_\theta(S_t, A_t) + \alpha \log \pi_\phi(A_t \mid S_t) \right) \right]
+			\end{align}
+			
+			Donde $\mathcal{D}$ es un buffer de repetición característico de los algoritmos off-policy que almacena valores ya observados. En cada iteración, aproxima la esperanza sobre las acciones por el valor de la muestra según la política actual. Además, se puede calcular la esperanza sobre las muestras de políticas pasadas debido a que la política de comportamiento es diferente a la política objetivo.
+			
+			\item Función acción-valor: buscan imitar el operador de Bellman aplicado sobre la función acción valor, minimizando el error a través de la actualización de los parámetros $\theta$ de la red:
+			
+			\begin{align}
+			& J_Q(\theta) = \mathbb{E}_{(S_t, A_t) \sim \mathcal{D}} \left[ \frac{1}{2} \left( Q_\theta(S_t, A_t) - \left( R_{t+1} + \gamma \mathbb{E}_{S_{t+1}} \left[ V_{\bar{\psi}}(S_{t+1}) \right] \right) \right)^2 \right] \\
+			& \nabla_\theta J_Q(\theta) = \mathbb{E}_{(S_t, A_t) \sim \mathcal{D}} \left[ \nabla_\theta Q_\theta(S_t, A_t) \left( Q_\theta(S_t, A_t) - R_{t+1} - \gamma V_{\bar{\psi}}(S_{t+1}) \right) \right]
+			\end{align}
+			
+			Donde $\bar{\psi} = \tau \psi + (1 - \tau)\bar{\psi}$ es una media móvil sobre los parámetros de la red de la función acción-valor. Utilizar los pesos $\bar{\psi}$ en este punto ayuda a estabilizar el entrenamiento. Para evitar que la red sea demasiado optimistas, se entrenan dos redes Q de forma independiente y se toma el mínimo entre ambas para actualizar tanto la política objetivo como la función estado-valor.
+			
+			\item Política: miniiza la divergencia de Kullback-Leibler entre la distribución $\frac{\exp(Q_\theta(S_t, \cdot))}{Z_\theta(S_t)}$ deseada de la política y la aproximada por la red mediante los parámetros $\phi$:
+			
+			\begin{align}
+			& J_\pi(\phi) = \mathbb{E}_{S_t \sim \mathcal{D}, \epsilon_t \sim \mathcal{N}} \left[ \alpha \log \pi_\phi(f_\phi(\epsilon_t; S_t) \mid S_t) - Q_\theta(S_t, f_\phi(\epsilon_t; S_t)) \right] \\
+			& \begin{aligned}
+			\nabla_\phi J_\pi(\phi) &= \mathbb{E}_{S_t \sim \mathcal{D}, \epsilon_t \sim \mathcal{N}} \bigg[ \alpha \nabla_\phi \log \pi_\phi(A_t \mid S_t) \\
+			&\qquad + \left( \alpha \nabla_{A_t} \log \pi_\phi(A_t \mid S_t) - \nabla_{A_t} Q_\theta(S_t, A_t) \right) \nabla_\phi f_\phi(\epsilon_t; S_t) \bigg]
+			\end{aligned}
+			\end{align}
+			
+			Para derivar la política con baja varianza, se emplea el truco de reparametrización: la acción se calcula como una transformación determinista de un ruido externo $\epsilon_t$ mediante la red $f_\phi$:
+			
+			\begin{equation}
+			a_t = f_\phi(\epsilon_t ; s_t)
+			\end{equation}
+		\end{itemize}
 	\subsection{Optimización de cajas negras costosas}
 	Debido al alto costo computacional del entrenamiento en aprendizaje por refuerzo, es fundamental optimizar la búsqueda de hiperparámetros reduciendo las evaluaciones de la función objetivo (en este trabajo, en entrenamientos de 50,000 épocas). En lugar de emplear un barrido por fuerza bruta, se utiliza una estrategia de optimización basada en Estimadores de Parzen en Estructura de Árbol (TPE) \cite{NIPS2011_86e8f7ab}, la cual permite un muestreo de parámetros más eficiente.
 	\newline

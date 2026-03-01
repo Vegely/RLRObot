@@ -1,48 +1,48 @@
-This is BibTeX, Version 0.99d
+This is BibTeX, Version 0.99e
 Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: informe.aux
 Reallocating 'name_of_file' (item size: 1) to 7 items.
 The style file: ieeetr.bst
 Reallocating 'name_of_file' (item size: 1) to 13 items.
 Database file #1: bibliografia.bib
-You've used 3 entries,
+You've used 4 entries,
             1876 wiz_defined-function locations,
-            498 strings with 4082 characters,
-and the built_in function-call counts, 723 in all, are:
-= -- 48
-> -- 56
+            505 strings with 4328 characters,
+and the built_in function-call counts, 1137 in all, are:
+= -- 90
+> -- 70
 < -- 0
-+ -- 19
-- -- 16
-* -- 62
-:= -- 125
-add.period$ -- 3
-call.type$ -- 3
-change.case$ -- 2
++ -- 24
+- -- 20
+* -- 90
+:= -- 176
+add.period$ -- 4
+call.type$ -- 4
+change.case$ -- 3
 chr.to.int$ -- 0
-cite$ -- 3
-duplicate$ -- 37
-empty$ -- 66
-format.name$ -- 16
-if$ -- 161
+cite$ -- 4
+duplicate$ -- 60
+empty$ -- 106
+format.name$ -- 20
+if$ -- 264
 int.to.chr$ -- 0
-int.to.str$ -- 3
-missing$ -- 2
-newline$ -- 12
-num.names$ -- 6
-pop$ -- 15
+int.to.str$ -- 4
+missing$ -- 3
+newline$ -- 15
+num.names$ -- 7
+pop$ -- 21
 preamble$ -- 1
 purify$ -- 0
 quote$ -- 0
-skip$ -- 13
+skip$ -- 31
 stack$ -- 0
-substring$ -- 6
-swap$ -- 9
+substring$ -- 46
+swap$ -- 20
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
 type$ -- 0
 warning$ -- 0
-while$ -- 5
-width$ -- 4
-write$ -- 30
+while$ -- 9
+width$ -- 5
+write$ -- 40
